@@ -19,23 +19,39 @@
 # limitations under the License.
 #
 
-upload_module_src_filename = ::File.basename(node['nginx']['upload']['url'])
-upload_module_src_filepath = "#{Chef::Config['file_cache_path']}/#{upload_module_src_filename}"
-upload_module_extract_path = "#{Chef::Config['file_cache_path']}/nginx_upload_module-#{node['nginx']['upload']['version']}"
+if node['nginx']['upload']['install_method'] == "git"
+  upload_module_git_filename = ::File.basename(node["nginx"]["upload"]["git"]["repository"])
+  upload_module_git_filepath = "#{Chef::Config['file_cache_path']}/#{upload_module_git_filename}-#{node["nginx"]["upload"]["git"]["reference"]}"
 
-remote_file upload_module_src_filepath do
-  source node['nginx']['upload']['url']
-  checksum node['nginx']['upload']['checksum']
-  owner "root"
-  group "root"
-  mode 00644
+  git upload_module_git_filepath do
+    repository node["nginx"]["upload"]["git"]["repository"]
+    reference node["nginx"]["upload"]["git"]["reference"]
+    action :checkout
+    user "root"
+    group "root"
+  end
+
+  node.run_state['nginx_configure_flags'] =
+    node.run_state['nginx_configure_flags'] | ["--add-module=#{upload_module_git_filepath}"]
+else
+  upload_module_src_filename = ::File.basename(node['nginx']['upload']['url'])
+  upload_module_src_filepath = "#{Chef::Config['file_cache_path']}/#{upload_module_src_filename}"
+  upload_module_extract_path = "#{Chef::Config['file_cache_path']}/nginx_upload_module-#{node['nginx']['upload']['version']}"
+
+  remote_file upload_module_src_filepath do
+    source node['nginx']['upload']['url']
+    checksum node['nginx']['upload']['checksum']
+    owner "root"
+    group "root"
+    mode 00644
+  end
+
+  execute "extract_upload_module" do
+    command "tar zxf #{upload_module_src_filepath}"
+    cwd Chef::Config['file_cache_path']
+    not_if "test -d #{upload_module_extract_path}"
+  end
+
+  node.run_state['nginx_configure_flags'] =
+    node.run_state['nginx_configure_flags'] | ["--add-module=#{upload_module_extract_path}"]
 end
-
-execute "extract_upload_module" do
-  command "tar zxf #{upload_module_src_filepath}"
-  cwd Chef::Config['file_cache_path']
-  not_if "test -d #{upload_module_extract_path}"
-end
-
-node.run_state['nginx_configure_flags'] =
-  node.run_state['nginx_configure_flags'] | ["--add-module=#{upload_module_extract_path}"]
