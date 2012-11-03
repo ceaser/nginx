@@ -184,6 +184,14 @@ cookbook_file "#{node['nginx']['dir']}/mime.types" do
   notifies :reload, 'service[nginx]', :immediately
 end
 
+template "/etc/profile.d/nginx.sh" do
+  source "nginx.sh.erb"
+  mode "0644"
+  variables(
+    :nginx_path => "#{node['nginx']['source']['prefix']}/sbin"
+  )
+end
+
 service "nginx" do
   action :start
 end
